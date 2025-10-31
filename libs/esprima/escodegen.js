@@ -670,7 +670,10 @@
         var verbatim, result, prec;
         verbatim = expr[extra.verbatim];
         if (typeof verbatim === 'string') {
-          result = parenthesize(generateVerbatimString(verbatim), Precedence.Sequence, precedence);
+          if (extra.verbatim != "raw") 
+            result = parenthesize(generateVerbatimString(verbatim), Precedence.Sequence, precedence);
+          else
+            result = generateVerbatimString(verbatim);
         } else {
           result = generateVerbatimString(verbatim.content);
           prec = verbatim.precedence != null ? verbatim.precedence : Precedence.Sequence;
