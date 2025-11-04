@@ -3619,6 +3619,18 @@ return /******/ (function(modules) { // webpackBootstrap
 	        }
 	        return this.finalize(node, new Node.VariableDeclarator(id, init));
 	    };
+		Parser.prototype.parseStaticVariableDeclaration = function (inId) {
+	        var node = this.createNode();
+	        var params = [];
+	        var id = inId ? inId : this.parsePattern(params, 'static');
+	        if (this.context.strict && id.type === syntax_1.Syntax.Identifier) {
+	            if (this.scanner.isRestrictedWord(id.name)) {
+	                this.tolerateError(messages_1.Messages.StrictVarName);
+	            }
+	        }
+	        var init = this.isolateCoverGrammar(this.parseAssignmentExpression);
+	        return this.finalize(node, new Node.VariableDeclarator(id, init));
+	    };
 	    Parser.prototype.parseVariableDeclarationList = function (options) {
 	        var opt = { inFor: options.inFor };
 	        var list = [];
@@ -3629,12 +3641,28 @@ return /******/ (function(modules) { // webpackBootstrap
 	        }
 	        return list;
 	    };
+		Parser.prototype.parseStaticVariableDeclarationList = function (options) {
+	        var inId = options.inId;
+	        var list = [];
+	        list.push(this.parseStaticVariableDeclaration(inId));
+	        while (this.match(',')) {
+	            this.nextToken();
+	            list.push(this.parseStaticVariableDeclaration());
+	        }
+	        return list;
+	    };
 	    Parser.prototype.parseVariableStatement = function () {
 	        var node = this.createNode();
 	        this.expectKeyword('var');
 	        var declarations = this.parseVariableDeclarationList({ inFor: false });
 	        this.consumeSemicolon();
 	        return this.finalize(node, new Node.VariableDeclaration(declarations, 'var'));
+	    };
+		Parser.prototype.parseStaticVariableStatement = function (inId) {
+	        var node = this.createNode();
+	        var declarations = this.parseStaticVariableDeclarationList({ inId: inId });
+	        this.consumeSemicolon();
+	        return this.finalize(node, new Node.VariableDeclaration(declarations, 'static'));
 	    };
 	    // https://tc39.github.io/ecma262/#sec-empty-statement
 	    Parser.prototype.parseEmptyStatement = function () {
@@ -4578,7 +4606,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            key = this.parseObjectPropertyKey();
 	            var id = key;
 	            if (id.name === 'static' && (this.qualifiedPropertyName(this.lookahead) || this.match('*'))) {
-	                token = this.lookahead;
+					token = this.lookahead;
 	                isStatic = true;
 	                computed = this.match('[');
 	                if (this.match('*')) {
@@ -4586,6 +4614,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	                }
 	                else {
 	                    key = this.parseObjectPropertyKey();
+						if (this.match('=')) {
+							this.nextToken();
+							return this.parseStaticVariableStatement(key);	
+						}
 	                }
 	            }
 	            if ((token.type === 3 /* Identifier */) && !this.hasLineTerminator && (token.value === 'async')) {
@@ -4628,6 +4660,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	            value = isAsync ? this.parsePropertyMethodAsyncFunction() : this.parsePropertyMethodFunction();
 	            method = true;
 	        }
+			// === custom code start ===
+			if (!kind && key && this.match('=')) {
+					console.log('Warning: custom esprima for class field assignment expression: ' + token.value);
+					const left = new Node.Identifier(token.value);
+					this.nextToken();
+					const right = this.isolateCoverGrammar(this.parseAssignmentExpression);
+					return this.finalize(node, new Node.AssignmentExpression('=', left, right));
+			}
+			// === custom code end ===
 	        if (!kind) {
 	            this.throwUnexpectedToken(this.lookahead);
 	        }
